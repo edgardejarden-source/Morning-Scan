@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EdgeDesk · Morning Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0b0c10;--surf:#12141a;--surf2:#191c24;--surf3:#1f2230;
+  --bd:#22262f;--bd2:#2c3040;
+  --tx:#dde1ef;--tx2:#7a839e;--tx3:#454d60;
+  --grn:#00d27e;--grn-d:rgba(0,210,126,0.1);
+  --red:#f63d5e;--red-d:rgba(246,61,94,0.12);
+  --amb:#f79009;--amb-d:rgba(247,144,9,0.12);
+  --blu:#4d9eff;--blu-d:rgba(77,158,255,0.1);
+  --tel:#2dd4bf;
+  --pur:#9b8afb;
+}
+body{background:var(--bg);color:var(--tx);font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;}
+a{color:var(--blu);text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+/* ── Header ── */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 26px;background:var(--surf);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
+.logo{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;}
+.logo b{color:var(--grn);}
+.htime{font-size:11px;color:var(--tx2);}
+.mdot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px;}
+.hdr-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.last-upd{font-size:11px;color:var(--tx3);}
+
+/* ── Buttons ── */
+.btn{font-family:'JetBrains Mono',monospace;cursor:pointer;border-radius:5px;font-size:12px;border:none;transition:opacity .15s;}
+.btn-go{background:var(--grn);color:#000;padding:9px 22px;font-weight:600;letter-spacing:.04em;}
+.btn-go:hover{opacity:.85;}
+.btn-go:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ── Layout ── */
+.main{padding:18px 26px 40px;max-width:1800px;margin:0 auto;}
+.sec{margin-bottom:24px;}
+.sec-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.sec-ttl{font-family:'Syne',sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--tx2);white-space:nowrap;}
+.sec-ln{flex:1;height:1px;background:var(--bd);}
+.sec-sub{font-size:10px;color:var(--tx3);white-space:nowrap;}
+
+/* ── Status bar ── */
+.sbar{display:none;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--bd);border-radius:7px;padding:10px 16px;margin-bottom:18px;font-size:12px;color:var(--tx2);}
+.spin{width:14px;height:14px;border:2px solid var(--bd2);border-top-color:var(--grn);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.prog-wrap{flex:1;height:4px;background:var(--surf2);border-radius:2px;max-width:300px;}
+.prog-bar{height:100%;background:var(--grn);border-radius:2px;transition:width .4s ease;}
+
+/* ── CORS warning ── */
+.cors-warn{background:var(--amb-d);border:1px solid rgba(247,144,9,.3);border-radius:7px;padding:14px 18px;margin-bottom:18px;font-size:12px;color:var(--tx2);line-height:1.8;display:none;}
+.cors-warn strong{color:var(--amb);}
+
+/* ── Pulse grid ── */
+.pulse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px;}
+.pc{background:var(--surf);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;}
+.pc-lbl{font-size:9px;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
+.pc-val{font-size:15px;font-weight:500;margin-bottom:1px;}
+.pc-chg{font-size:11px;}
+.pc-load{color:var(--tx3)!important;}
+
+/* ── Two-col ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+@media(max-width:860px){.two-col{grid-template-columns:1fr;}}
+
+/* ── Sentiment ── */
+.sent-box{background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:16px 20px;min-height:130px;display:flex;gap:18px;align-items:flex-start;}
+.sent-score{flex-shrink:0;text-align:center;width:68px;}
+.sent-n{font-size:42px;font-weight:600;line-height:1;}
+.sent-d{font-size:10px;color:var(--tx3);}
+.sent-mood{font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-top:4px;}
+.sent-div{width:1px;background:var(--bd);align-self:stretch;}
+.sent-body{flex:1;}
+.sent-sum{font-size:12px;color:var(--tx);line-height:1.7;margin-bottom:8px;}
+.sent-tags{display:flex;flex-wrap:wrap;gap:4px;}
+.stag{background:var(--surf2);border:1px solid var(--bd2);border-radius:3px;padding:2px 8px;font-size:10px;color:var(--tx2);}
+
+/* ── Sector ── */
+.sector-box{background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;min-height:130px;}
+.sector-items{display:flex;flex-wrap:wrap;gap:5px;}
+.si{background:var(--surf2);border:1px solid var(--bd);border-radius:4px;padding:5px 10px;font-size:11px;display:flex;gap:6px;align-items:center;}
+
+/* ── Econ table ── */
+.tbox{background:var(--surf);border:1px solid var(--bd);border-radius:8px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:10px;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--bd);}
+th.r{text-align:right;}
+td{padding:9px 12px;border-bottom:1px solid var(--bd);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.015);}
+
+/* ── Impact badges ── */
+.ibadge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.ih{background:var(--red-d);color:var(--red);border:1px solid rgba(246,61,94,.25);}
+.im{background:var(--amb-d);color:var(--amb);border:1px solid rgba(247,144,9,.25);}
+.il{background:var(--surf2);color:var(--tx3);border:1px solid var(--bd);}
+
+/* ── Gapper table ── */
+.scroll-x{overflow-x:auto;}
+table.gt{min-width:1300px;}
+table.gt th{cursor:pointer;user-select:none;}
+table.gt th:hover{color:var(--tx2);}
+.r{text-align:right;}
+.sym-cell{display:flex;flex-direction:column;gap:1px;}
+.sym{font-size:13px;font-weight:600;}
+.co{font-size:10px;color:var(--tx3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gpill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;}
+.gu{background:var(--grn-d);color:var(--grn);}
+.gd{background:var(--red-d);color:var(--red);}
+.srpr{display:flex;flex-direction:column;gap:2px;font-size:11px;}
+.srpr .s{color:var(--grn);}
+.srpr .r{color:var(--red);}
+
+/* ── Alerts ── */
+.alerts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+.alert-card{background:var(--surf);border:1px solid var(--bd);border-radius:7px;padding:14px 16px;}
+.al-ttl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin-bottom:7px;}
+.al-body{font-size:11px;color:var(--tx2);line-height:1.75;}
+
+/* ── Checklist ── */
+.checklist{background:var(--surf2);border:1px solid var(--bd2);border-left:3px solid var(--amb);border-radius:0 6px 6px 0;padding:14px 18px;font-size:11px;color:var(--tx2);line-height:1.9;}
+.checklist strong{color:var(--amb);}
+
+/* ── Filters ── */
+.fbar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.fpill{background:var(--surf2);border:1px solid var(--bd);border-radius:3px;padding:2px 8px;font-size:10px;color:var(--tx3);}
+
+/* ── Empty ── */
+.empty{text-align:center;padding:40px;color:var(--tx3);font-size:12px;}
+
+footer{font-size:10px;color:var(--tx3);text-align:center;padding:18px 0 0;border-top:1px solid var(--bd);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div class="logo">EDGE<b>DESK</b></div>
+    <div class="htime" id="clock"></div>
+    <div id="mkt-lbl" style="font-size:11px;"></div>
+  </div>
+  <div class="hdr-r">
+    <span class="last-upd" id="last-upd"></span>
+    <button class="btn btn-go" id="scan-btn" onclick="runScan()">▶ RUN MORNING SCAN</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- CORS warning -->
+  <div class="cors-warn" id="cors-warn">
+    <strong>⚠ CORS Restriction Detected.</strong> Browsers block data requests from local files (<code>file://</code>).
+    <strong>Fix:</strong> Either <a href="https://pages.github.com" target="_blank">host this file on GitHub Pages (free)</a>, or drag it into a Chrome/Edge tab after launching Chrome with: <code>--disable-web-security --user-data-dir=/tmp/chrome-dev</code>.
+    Data will still load where allowed.
+  </div>
+
+  <!-- Status bar -->
+  <div class="sbar" id="sbar">
+    <div class="spin"></div>
+    <span id="sbar-msg">Loading...</span>
+    <div class="prog-wrap"><div class="prog-bar" id="prog" style="width:0%"></div></div>
+  </div>
+
+  <!-- Market Pulse -->
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-ttl">Market Pulse</span><div class="sec-ln"></div><span class="sec-sub">Futures · Indices · Macro</span></div>
+    <div class="pulse-grid" id="pulse-grid">
+      <div class="pc" style="grid-column:1/-1;padding:28px;text-align:center;"><span style="color:var(--tx3);">Click RUN MORNING SCAN to load</span></div>
+    </div>
+  </div>
+
+  <!-- Sentiment + Sectors -->
+  <div class="two-col">
+    <div>
+      <div class="sec-hd"><span class="sec-ttl">Market Sentiment</span><div class="sec-ln"></div></div>
+      <div class="sent-box" id="sent-box"><span style="color:var(--tx3);margin:auto;font-size:12px;">Run scan to load</span></div>
+    </div>
+    <div>
+      <div class="sec-hd"><span class="sec-ttl">Sector Rotation</span><div class="sec-ln"></div></div>
+      <div class="sector-box" id="sec-box" style="display:flex;align-items:center;justify-content:center;"><span style="color:var(--tx3);font-size:12px;">Run scan to load</span></div>
+    </div>
+  </div>
+
+  <!-- Economic Calendar -->
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-ttl">Economic Calendar</span><div class="sec-ln"></div><span class="sec-sub" id="econ-ct"></span></div>
+    <div class="tbox" id="econ-wrap"><div class="empty">Run scan to load today's economic events</div></div>
+  </div>
+
+  <!-- Pre-Market Gappers -->
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-ttl">Pre-Market Gappers</span><div class="sec-ln"></div><span class="sec-sub" id="gap-ct"></span></div>
+    <div class="fbar">
+      <span class="fpill">Gap ≥ 2%</span><span class="fpill">ATR ≥ $1.00</span><span class="fpill">Mkt Cap ≥ $2B</span>
+      <span class="fpill">Price ≥ $10</span><span class="fpill">PM Volume ≥ 500K</span><span class="fpill">↕ Click headers to sort</span>
+    </div>
+    <div class="tbox"><div class="scroll-x" id="gap-wrap"><div class="empty">Run scan to load gappers</div></div></div>
+  </div>
+
+  <!-- Prop Desk Alerts -->
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-ttl">Prop Desk Intelligence</span><div class="sec-ln"></div></div>
+    <div class="alerts-grid" id="alerts-grid">
+      <div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--tx3);font-size:12px;">Run scan to load</div>
+    </div>
+  </div>
+
+  <!-- Manual Checklist -->
+  <div class="sec">
+    <div class="sec-hd"><span class="sec-ttl">Pre-Open Manual Checklist</span><div class="sec-ln"></div></div>
+    <div class="checklist">
+      <strong>Level 2 / T&S</strong> — Order flow, large prints, tape speed (momentum vs. fade) &nbsp;·&nbsp;
+      <strong>Dark Pool</strong> — Unusual Whales / Flowalgo for institutional accumulation &nbsp;·&nbsp;
+      <strong>Options Flow</strong> — Sweeps, large blocks, unusual call/put ratio &nbsp;·&nbsp;
+      <strong>Halts</strong> — News halts = explosive move on resume &nbsp;·&nbsp;
+      <strong>VWAP anchors</strong> — Pre-mkt high/low, prior day close, prior day high/low &nbsp;·&nbsp;
+      <strong>Squeeze Setups</strong> — High SI% + upward PM momentum + rising vol = squeeze risk &nbsp;·&nbsp;
+      <strong>Tape speed</strong> — Fast tape = momentum; slow tape = fade &nbsp;·&nbsp;
+      <strong>Lockup expirations</strong> — Sudden supply shock on recent IPOs
+    </div>
+  </div>
+
+  <footer>EdgeDesk · Data: Yahoo Finance, TradingView Economic Calendar · No API key required · Educational purposes only</footer>
+</div>
+
+<script>
+// ─── STOCK UNIVERSE (top ~160 liquid US stocks) ───────────────────────────
+const UNIVERSE=[
+  'AAPL','MSFT','NVDA','AMZN','GOOGL','GOOG','META','TSLA','AVGO','BRK-B',
+  'JPM','LLY','V','XOM','MA','UNH','JNJ','PG','HD','COST','NFLX','ABBV',
+  'BAC','CRM','WMT','CVX','MRK','KO','PEP','AMD','ADBE','TMO','ACN','MCD',
+  'CSCO','ABT','DHR','INTC','VZ','DIS','NKE','TXN','PM','NEE','IBM','WFC',
+  'AMGN','GS','MS','ORCL','CAT','INTU','QCOM','LOW','SBUX','GE','BA','UPS',
+  'AMAT','NOW','PANW','BLK','ISRG','ELV','CI','ADI','MU','DE','SYK','GILD',
+  'AXP','T','REGN','VRTX','ZTS','KLAC','LRCX','SCHW','C','PYPL','COIN',
+  'SNOW','PLTR','UBER','ABNB','DASH','RIVN','NIO','BABA','PINS','SNAP',
+  'TWLO','NET','DDOG','CRWD','ZS','OKTA','MDB','AFRM','UPST','SOFI',
+  'MELI','SHOP','SQ','ROKU','TTD','APP','RBLX','U','EA','TTWO',
+  'GME','HOOD','RDDT','ARM','SMCI','MU','MRVL','ON','ENPH','SEDG',
+  'F','GM','LCID','RIVN','NIO','LI','XPEV','TSLA',
+  'SPY','QQQ','IWM','DIA','XLF','XLK','XLE','XLV','XLI','XLRE',
+  'GLD','SLV','USO','TLT','HYG','ARKK','SOXS','TQQQ','SQQQ',
+  'NVDL','TSLL','NFLX','META','GOOGL','AMZN','MSFT','AAPL',
+  'JPM','BAC','WFC','C','GS','MS','BK','USB','PNC',
+  'PFE','MRNA','BNTX','BIIB','ILMN','IQV','CNC','HCA',
+  'AMT','PLD','CCI','SPG','EQIX','DLR','O',
+  'RTX','LMT','NOC','GD','HII',
+  'WBA','CVS','MCK','ABC','CAH',
+  'UBER','LYFT','ABNB','DASH','BKNG','EXPE'
+].filter((v,i,a)=>a.indexOf(v)===i);
+
+const PROXY='https://corsproxy.io/?';
+
+// ─── Clock ────────────────────────────────────────────────────────────────
+function tick(){
+  const now=new Date();
+  document.getElementById('clock').textContent=now.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',timeZoneName:'short'});
+  const et=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const d=et.getDay(),h=et.getHours(),m=et.getMinutes(),mins=h*60+m;
+  let lbl,col;
+  if(d===0||d===6){lbl='Weekend';col='#454d60';}
+  else if(mins<240){lbl='Closed';col='#454d60';}
+  else if(mins<570){lbl='Pre-Market Open';col='#f79009';}
+  else if(mins<960){lbl='Market Open';col='#00d27e';}
+  else if(mins<1020){lbl='After Hours';col='#4d9eff';}
+  else{lbl='Market Closed';col='#454d60';}
+  document.getElementById('mkt-lbl').innerHTML=`<span class="mdot" style="background:${col}"></span><span style="color:${col}">${lbl}</span>`;
+}
+tick();setInterval(tick,1000);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+const fmtP=n=>n!=null?'$'+Number(n).toFixed(2):'—';
+const fmtPct=n=>n!=null?(n>=0?'+':'')+Number(n).toFixed(2)+'%':'—';
+const fmtVol=n=>{if(!n)return'—';if(n>=1e9)return(n/1e9).toFixed(2)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return''+n;};
+const fmtCap=b=>{if(!b)return'—';if(b>=1000)return'$'+(b/1000).toFixed(2)+'T';return'$'+Number(b).toFixed(0)+'B';};
+const clr=n=>n==null?'var(--tx2)':n>0?'var(--grn)':n<0?'var(--red)':'var(--tx2)';
+
+function setStatus(msg,show=true,pct=null){
+  const bar=document.getElementById('sbar');
+  bar.style.display=show?'flex':'none';
+  document.getElementById('sbar-msg').textContent=msg;
+  if(pct!=null)document.getElementById('prog').style.width=pct+'%';
+}
+
+async function safeFetch(url,useProxy=false){
+  const target=useProxy?PROXY+encodeURIComponent(url):url;
+  const r=await fetch(target,{headers:{'Accept':'application/json'}});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+// ─── ATR Calculation ──────────────────────────────────────────────────────
+function calcATR(quotes,period=14){
+  if(!quotes||quotes.length<period+1)return null;
+  const trs=[];
+  for(let i=1;i<quotes.length;i++){
+    const h=quotes[i].high,l=quotes[i].low,pc=quotes[i-1].close;
+    trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+  }
+  let atr=trs.slice(0,period).reduce((a,b)=>a+b,0)/period;
+  for(let i=period;i<trs.length;i++)atr=(atr*(period-1)+trs[i])/period;
+  return Math.round(atr*100)/100;
+}
+
+// ─── Fetch bulk Yahoo Finance quotes ─────────────────────────────────────
+async function batchQuotes(symbols,useProxy=false){
+  const results={};
+  const chunks=[];
+  for(let i=0;i<symbols.length;i+=100)chunks.push(symbols.slice(i,i+100));
+  for(const chunk of chunks){
+    try{
+      const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${chunk.join(',')}&fields=preMarketPrice,preMarketChangePercent,preMarketVolume,regularMarketPreviousClose,regularMarketPrice,regularMarketVolume,marketCap,shortName,longName,averageDailyVolume10Day,fiftyTwoWeekHigh,fiftyTwoWeekLow,shortPercentOfFloat,floatShares,sector,trailingPE,priceToBook`;
+      const data=await safeFetch(url,useProxy);
+      (data?.quoteResponse?.result||[]).forEach(q=>{results[q.symbol]=q;});
+    }catch(e){console.warn('batch quote error',e);}
+  }
+  return results;
+}
+
+// ─── Fetch historical for ATR ─────────────────────────────────────────────
+async function fetchATR(symbol,useProxy=false){
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=30d`;
+    const data=await safeFetch(url,useProxy);
+    const r=data?.chart?.result?.[0];
+    if(!r)return null;
+    const ts=r.timestamp,q=r.indicators?.quote?.[0];
+    if(!ts||!q)return null;
+    const ohlc=ts.map((_,i)=>({high:q.high[i],low:q.low[i],close:q.close[i]})).filter(x=>x.high&&x.low&&x.close);
+    return calcATR(ohlc);
+  }catch(e){return null;}
+}
+
+// ─── Fetch news headline ──────────────────────────────────────────────────
+async function fetchNews(symbol,useProxy=false){
+  try{
+    const url=`https://query1.finance.yahoo.com/v1/finance/search?q=${symbol}&quotesCount=0&newsCount=3&enableFuzzyQuery=false`;
+    const data=await safeFetch(url,useProxy);
+    const items=data?.news||[];
+    if(!items.length)return null;
+    const latest=items[0];
+    return{title:latest.title,link:latest.link,publisher:latest.publisher,time:latest.providerPublishTime};
+  }catch(e){return null;}
+}
+
+// ─── Economic Calendar (TradingView) ─────────────────────────────────────
+async function fetchEcon(useProxy=false){
+  try{
+    const now=new Date();
+    const from=now.toISOString().replace(/T.*/,'T00:00:00.000Z');
+    const to=now.toISOString().replace(/T.*/,'T23:59:59.000Z');
+    const url=`https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=US`;
+    const data=await safeFetch(url,useProxy);
+    return Array.isArray(data)?data:(data?.result||[]);
+  }catch(e){
+    console.warn('econ calendar error',e);
+    return[];
+  }
+}
+
+// ─── Sector ETF performance ───────────────────────────────────────────────
+const SECTOR_ETFS={
+  'XLK':'Technology','XLF':'Financials','XLV':'Health Care','XLI':'Industrials',
+  'XLE':'Energy','XLC':'Comm. Services','XLY':'Cons. Discretionary','XLP':'Cons. Staples',
+  'XLRE':'Real Estate','XLB':'Materials','XLU':'Utilities'
+};
+
+// ─── Market overview symbols ──────────────────────────────────────────────
+const MACRO_SYMBOLS=['ES=F','NQ=F','YM=F','RTY=F','^VIX','DX-Y.NYB','^TNX','^IRX','GC=F','CL=F','BTC-USD','ETH-USD'];
+
+// ─── Main scan ────────────────────────────────────────────────────────────
+async function runScan(){
+  const btn=document.getElementById('scan-btn');
+  btn.disabled=true;btn.textContent='⟳ SCANNING...';
+  setStatus('Fetching market overview...',true,5);
+
+  let useProxy=false;
+  // Test if direct fetch works
+  try{
+    await fetch('https://query1.finance.yahoo.com/v7/finance/quote?symbols=SPY',{headers:{'Accept':'application/json'}});
+  }catch(e){
+    useProxy=true;
+    document.getElementById('cors-warn').style.display='block';
+  }
+
+  try{
+    // 1. Market overview
+    setStatus('Fetching futures, VIX, macro data...',true,10);
+    const macroQ=await batchQuotes([...MACRO_SYMBOLS,...Object.keys(SECTOR_ETFS)],useProxy);
+
+    // 2. Economic calendar
+    setStatus('Fetching economic calendar...',true,20);
+    const econData=await fetchEcon(useProxy);
+
+    // 3. Bulk universe quotes
+    setStatus(`Scanning ${UNIVERSE.length} stocks for pre-market gaps...`,true,30);
+    const allQuotes=await batchQuotes(UNIVERSE,useProxy);
+
+    // 4. Filter gappers
+    setStatus('Filtering by gap, volume, market cap...',true,50);
+    const candidates=Object.values(allQuotes).filter(q=>{
+      const gap=q.preMarketChangePercent;
+      const pmVol=q.preMarketVolume||0;
+      const cap=(q.marketCap||0)/1e9;
+      const price=q.preMarketPrice||q.regularMarketPrice||0;
+      return Math.abs(gap||0)>=2 && pmVol>=500000 && cap>=2 && price>=10;
+    });
+
+    // 5. ATR for candidates
+    setStatus(`Calculating ATR for ${candidates.length} candidates...`,true,60);
+    const gappers=[];
+    for(let i=0;i<candidates.length;i++){
+      const q=candidates[i];
+      setStatus(`Fetching ATR: ${q.symbol} (${i+1}/${candidates.length})...`,true,60+Math.round((i/candidates.length)*20));
+      const atr=await fetchATR(q.symbol,useProxy);
+      if(atr==null||atr<1)continue;
+      const news=await fetchNews(q.symbol,useProxy);
+      gappers.push({
+        symbol:q.symbol,
+        name:q.shortName||q.longName||'',
+        price:q.preMarketPrice||q.regularMarketPrice,
+        prev_close:q.regularMarketPreviousClose,
+        gap_pct:q.preMarketChangePercent,
+        atr:atr,
+        pm_volume:q.preMarketVolume||0,
+        cap_b:(q.marketCap||0)/1e9,
+        float_m:q.floatShares?(q.floatShares/1e6):null,
+        short_pct:q.shortPercentOfFloat||null,
+        sector:q.sector||'—',
+        avg_vol:q.averageDailyVolume10Day||0,
+        wk52h:q.fiftyTwoWeekHigh,
+        wk52l:q.fiftyTwoWeekLow,
+        news:news,
+        rvol:q.averageDailyVolume10Day?(q.preMarketVolume/q.averageDailyVolume10Day):null,
+      });
+    }
+
+    setStatus('Rendering dashboard...',true,90);
+    renderPulse(macroQ);
+    renderSentiment(macroQ);
+    renderSectors(macroQ);
+    renderEcon(econData);
+    renderGappers(gappers);
+    renderAlerts(macroQ,gappers);
+    setStatus('',false);
+    document.getElementById('last-upd').textContent='Updated '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+  }catch(err){
+    setStatus('Error: '+err.message,true);
+    console.error(err);
+  }finally{
+    btn.disabled=false;btn.textContent='▶ RUN MORNING SCAN';
+  }
+}
+
+// ─── Render: Pulse ────────────────────────────────────────────────────────
+function renderPulse(q){
+  const items=[
+    {sym:'ES=F',lbl:'ES Futures',fmt:v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:2})},
+    {sym:'NQ=F',lbl:'NQ Futures',fmt:v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:2})},
+    {sym:'YM=F',lbl:'YM Futures',fmt:v=>Number(v).toLocaleString('en-US',{maximumFractionDigits:0})},
+    {sym:'RTY=F',lbl:'RTY Futures',fmt:v=>Number(v).toFixed(2)},
+    {sym:'^VIX',lbl:'VIX',fmt:v=>Number(v).toFixed(2)},
+    {sym:'DX-Y.NYB',lbl:'DXY',fmt:v=>Number(v).toFixed(3)},
+    {sym:'^TNX',lbl:'10Y Yield',fmt:v=>Number(v).toFixed(3)+'%'},
+    {sym:'^IRX',lbl:'3M T-Bill',fmt:v=>Number(v).toFixed(3)+'%'},
+    {sym:'GC=F',lbl:'Gold',fmt:v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:2})},
+    {sym:'CL=F',lbl:'Crude Oil',fmt:v=>'$'+Number(v).toFixed(2)},
+    {sym:'BTC-USD',lbl:'Bitcoin',fmt:v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:0})},
+    {sym:'ETH-USD',lbl:'Ethereum',fmt:v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:2})},
+  ];
+  document.getElementById('pulse-grid').innerHTML=items.map(it=>{
+    const d=q[it.sym];
+    if(!d)return`<div class="pc"><div class="pc-lbl">${it.lbl}</div><div class="pc-val pc-load">—</div></div>`;
+    const pct=(d.preMarketChangePercent??d.regularMarketChangePercent)??null;
+    const val=d.preMarketPrice??d.regularMarketPrice;
+    const c=clr(pct);
+    return`<div class="pc"><div class="pc-lbl">${it.lbl}</div><div class="pc-val" style="color:${c}">${val!=null?it.fmt(val):'—'}</div><div class="pc-chg" style="color:${c}">${fmtPct(pct)}</div></div>`;
+  }).join('');
+}
+
+// ─── Render: Sentiment ────────────────────────────────────────────────────
+function renderSentiment(q){
+  const vix=q['^VIX']?.regularMarketPrice||20;
+  const es=q['ES=F'];
+  const esPct=es?.preMarketChangePercent??es?.regularMarketChangePercent??0;
+  const nq=q['NQ=F'];
+  const nqPct=nq?.preMarketChangePercent??nq?.regularMarketChangePercent??0;
+  const tnx=q['^TNX']?.regularMarketPrice??4.5;
+
+  // Derive score 1-10
+  let score=5;
+  if(esPct>1)score+=2;else if(esPct>0.3)score+=1;else if(esPct<-1)score-=2;else if(esPct<-0.3)score-=1;
+  if(vix<15)score+=1;else if(vix>25)score-=1;else if(vix>35)score-=2;
+  score=Math.max(1,Math.min(10,Math.round(score)));
+
+  const mood=score>=7?'Bullish':score<=3?'Bearish':score===5?'Neutral':'Mixed';
+  const moodC=score>=7?'var(--grn)':score<=3?'var(--red)':'var(--amb)';
+  const sc=score>=7?'var(--grn)':score<=3?'var(--red)':'var(--amb)';
+
+  const drivers=[];
+  if(Math.abs(esPct)>0.5)drivers.push(`ES futures ${esPct>0?'+':''}${esPct.toFixed(2)}%`);
+  if(vix<15)drivers.push('VIX low — complacency');
+  else if(vix>25)drivers.push('VIX elevated — uncertainty');
+  if(tnx>4.5)drivers.push('10Y yield elevated');
+  if(nqPct>1)drivers.push('Tech leading');
+  else if(nqPct<-1)drivers.push('Tech under pressure');
+  if(!drivers.length)drivers.push('Mixed signals','Moderate vol','Await catalyst');
+
+  const vixStr=`VIX at ${vix.toFixed(1)} (${vix<15?'low/complacent':vix<25?'moderate':vix<35?'elevated':'extreme'})`;
+  const esStr=`ES futures ${esPct>=0?'up':'down'} ${Math.abs(esPct).toFixed(2)}%`;
+  const summary=`${esStr}, ${vixStr}. Yield on 10Y at ${tnx.toFixed(3)}%. Overall tone is ${mood.toLowerCase()} based on pre-market action.`;
+
+  document.getElementById('sent-box').innerHTML=`
+    <div class="sent-score"><div class="sent-n" style="color:${sc}">${score}</div><div class="sent-d">/ 10</div><div class="sent-mood" style="color:${moodC}">${mood.toUpperCase()}</div></div>
+    <div class="sent-div"></div>
+    <div class="sent-body"><div class="sent-sum">${summary}</div><div class="sent-tags">${drivers.map(d=>`<span class="stag">${d}</span>`).join('')}</div></div>`;
+}
+
+// ─── Render: Sectors ──────────────────────────────────────────────────────
+function renderSectors(q){
+  const items=Object.entries(SECTOR_ETFS).map(([sym,name])=>{
+    const d=q[sym];
+    const pct=d?.preMarketChangePercent??d?.regularMarketChangePercent??null;
+    return{name,pct};
+  }).filter(x=>x.pct!=null).sort((a,b)=>b.pct-a.pct);
+  if(!items.length){document.getElementById('sec-box').innerHTML='<span style="color:var(--tx3)">No sector data</span>';return;}
+  document.getElementById('sec-box').innerHTML=`<div class="sector-items">${items.map(s=>{
+    const c=clr(s.pct);
+    return`<div class="si"><span style="color:${c};font-size:10px;">${s.pct>=0?'▲':'▼'}</span><span>${s.name}</span><span style="color:${c}">${fmtPct(s.pct)}</span></div>`;
+  }).join('')}</div>`;
+  document.getElementById('sec-box').style.cssText='background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;';
+}
+
+// ─── Render: Economic Calendar ────────────────────────────────────────────
+function renderEcon(events){
+  document.getElementById('econ-ct').textContent=events.length+' events today';
+  if(!events.length){
+    document.getElementById('econ-wrap').innerHTML='<div class="empty">No US economic events found for today (or calendar unavailable — check <a href="https://tradingeconomics.com/calendar" target="_blank">tradingeconomics.com</a>)</div>';
+    return;
+  }
+  // TradingView event fields: date, name, currency, actual, forecast, previous, importance (0-2)
+  const impMap={0:'low',1:'medium',2:'high'};
+  const impClass={high:'ih',medium:'im',low:'il'};
+  const impColors={high:'var(--red)',medium:'var(--amb)',low:'var(--tx3)'};
+
+  // Sort by importance desc
+  const sorted=[...events].sort((a,b)=>(b.importance??0)-(a.importance??0));
+
+  const impactNote=(e)=>{
+    const h=e.importance>=2;
+    const name=(e.name||'').toLowerCase();
+    if(name.includes('cpi')||name.includes('inflation'))return'Hotter print → bonds sell, USD up, equities volatile; cooler → risk-on rally';
+    if(name.includes('fomc')||name.includes('fed'))return'Hawkish tone → rates up, growth stocks down; dovish → risk-on';
+    if(name.includes('nonfarm')||name.includes('payroll'))return'Beat → USD up, rates up, mixed for equities; miss → risk-off';
+    if(name.includes('gdp'))return'Strong GDP → rates up; weak → fear of recession';
+    if(name.includes('pce'))return'Hot PCE → Fed may stay hawkish; tame → rate cut hopes rise';
+    if(name.includes('jobless')||name.includes('unemploy'))return'High claims → growth fears; low claims → tight labor still';
+    if(name.includes('retail'))return'Retail beat → consumer strength; miss → slowing demand';
+    if(name.includes('pmi')||name.includes('manufacturing'))return'Above 50 = expansion → positive for industrials; below 50 = contraction';
+    if(h)return'High-impact event — watch for market volatility at release time';
+    return'Moderate impact — monitor for deviation from forecast';
+  };
+
+  let html=`<table><thead><tr><th>Time ET</th><th>Event</th><th>Impact</th><th>Forecast</th><th>Prior</th><th>Actual</th><th>Market Implication</th></tr></thead><tbody>`;
+  sorted.forEach(e=>{
+    const imp=impMap[e.importance??0];
+    const bc=impClass[imp];
+    const timeStr=e.date?new Date(e.date).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit'}):'—';
+    html+=`<tr>
+      <td style="color:var(--tx2);white-space:nowrap;">${timeStr}</td>
+      <td style="font-weight:500;">${e.name||'—'}</td>
+      <td><span class="ibadge ${bc}">${imp}</span></td>
+      <td style="color:var(--tx2);">${e.forecast??'—'}</td>
+      <td style="color:var(--tx2);">${e.previous??'—'}</td>
+      <td style="color:${e.actual!=null?'var(--blu)':'var(--tx3)'};">${e.actual??'—'}</td>
+      <td style="color:var(--tx2);font-size:11px;white-space:normal;min-width:190px;line-height:1.5;">${impactNote(e)}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('econ-wrap').innerHTML=html;
+}
+
+// ─── Render: Gappers ─────────────────────────────────────────────────────
+let gData=[],sc='gap_pct',sa=false;
+function sortG(col){sc===col?sa=!sa:(sc=col,sa=(col==='symbol'||col==='sector'));buildGT();}
+
+function renderGappers(g){
+  gData=g;
+  document.getElementById('gap-ct').textContent=g.length+' qualifying stocks';
+  if(!g.length){document.getElementById('gap-wrap').innerHTML='<div class="empty">No stocks met all criteria this pre-market session</div>';return;}
+  buildGT();
+}
+
+function buildGT(){
+  const sorted=[...gData].sort((a,b)=>{
+    let va=a[sc],vb=b[sc];
+    if(va==null&&vb==null)return 0;if(va==null)return 1;if(vb==null)return-1;
+    if(typeof va==='string')return sa?va.localeCompare(vb):vb.localeCompare(va);
+    return sa?va-vb:vb-va;
+  });
+  const th=(l,k,r=false)=>`<th class="${r?'r':''}" onclick="sortG('${k}')" style="${sc===k?'color:var(--tx)':''}">${l}${sc===k?(sa?' ↑':' ↓'):''}</th>`;
+  let html=`<table class="gt"><thead><tr>
+    ${th('Symbol','symbol')}${th('Gap %','gap_pct',true)}${th('Price','price',true)}${th('Prev Close','prev_close',true)}
+    ${th('ATR 14','atr',true)}${th('PM Volume','pm_volume',true)}${th('RVOL','rvol',true)}
+    ${th('Mkt Cap','cap_b',true)}${th('Float','float_m',true)}${th('Short %','short_pct',true)}
+    ${th('52W Pos','wk52l',true)}${th('Sector','sector')}${th('Catalyst / News','news')}
+  </tr></thead><tbody>`;
+  sorted.forEach(r=>{
+    const up=r.gap_pct>=0;
+    const siC=(r.short_pct||0)>20?'var(--red)':(r.short_pct||0)>10?'var(--amb)':'var(--tx2)';
+    const rvC=(r.rvol||0)>=3?'var(--amb)':(r.rvol||0)>=2?'var(--grn)':'var(--tx2)';
+    const w52pct=r.wk52h&&r.wk52l?Math.round(((r.price-r.wk52l)/(r.wk52h-r.wk52l))*100):null;
+    const w52bar=w52pct!=null?`<div style="display:flex;align-items:center;gap:5px;"><div style="width:50px;height:4px;background:var(--surf2);border-radius:2px;"><div style="width:${w52pct}%;height:100%;background:${w52pct>=70?'var(--grn)':w52pct<=30?'var(--red)':'var(--amb)'};border-radius:2px;"></div></div><span style="font-size:10px;color:var(--tx3);">${w52pct}%</span></div>`:'—';
+    const catHtml=r.news?`<a href="${r.news.link}" target="_blank" style="color:var(--tx);font-size:11px;line-height:1.5;display:block;max-width:260px;">${r.news.title||'View news'}</a><span style="color:var(--tx3);font-size:10px;">${r.news.publisher||''}</span>`:'<span style="color:var(--tx3);font-size:11px;">No news found — check manually</span>';
+    html+=`<tr>
+      <td><div class="sym-cell"><span class="sym">${r.symbol}</span><span class="co">${r.name}</span></div></td>
+      <td class="r"><span class="gpill ${up?'gu':'gd'}">${up?'▲':'▼'} ${(up?'+':'')+Number(r.gap_pct).toFixed(2)}%</span></td>
+      <td class="r" style="font-weight:500;">${fmtP(r.price)}</td>
+      <td class="r" style="color:var(--tx2);">${fmtP(r.prev_close)}</td>
+      <td class="r" style="color:var(--tel);">$${Number(r.atr).toFixed(2)}</td>
+      <td class="r" style="color:var(--tx2);">${fmtVol(r.pm_volume)}</td>
+      <td class="r" style="color:${rvC};">${r.rvol!=null?Number(r.rvol).toFixed(1)+'×':'—'}</td>
+      <td class="r" style="color:var(--tx2);">${fmtCap(r.cap_b)}</td>
+      <td class="r" style="color:var(--tx2);">${r.float_m?Number(r.float_m).toFixed(0)+'M':'—'}</td>
+      <td class="r" style="color:${siC};">${r.short_pct?Number(r.short_pct).toFixed(1)+'%':'—'}</td>
+      <td class="r">${w52bar}</td>
+      <td style="color:var(--tx2);font-size:11px;">${r.sector}</td>
+      <td style="min-width:240px;">${catHtml}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('gap-wrap').innerHTML=html;
+}
+
+// ─── Render: Alerts ───────────────────────────────────────────────────────
+function renderAlerts(q,gappers){
+  const vix=q['^VIX']?.regularMarketPrice||20;
+  const es=q['ES=F'];
+  const esPct=es?.preMarketChangePercent??0;
+
+  // Short squeeze candidates from gappers
+  const squeeze=gappers.filter(g=>g.gap_pct>0&&(g.short_pct||0)>15).map(g=>`${g.symbol} (SI: ${g.short_pct?.toFixed(0)}%, gap: +${g.gap_pct?.toFixed(1)}%)`).join(', ')||'None identified pre-market';
+
+  // High-vol vol alert
+  const highVol=vix>30?`⚠ VIX at ${vix.toFixed(1)} — elevated volatility, widen stops, reduce position size`:`VIX ${vix.toFixed(1)} — ${vix<15?'low vol / complacency environment, expect tight ranges':'normal vol range, standard sizing OK'}`;
+
+  // Market bias
+  const bias=esPct>0.5?`Bullish bias — ES +${esPct.toFixed(2)}%. Lean long on pullbacks, fade gap-downs with caution`:esPct<-0.5?`Bearish bias — ES ${esPct.toFixed(2)}%. Lean short on pops, gap-ups may fail`:
+  `Neutral open — ES flat. Wait for 9:45 AM directional confirmation before committing size`;
+
+  // Earnings reminder
+  const earningsNote='Check earnings.whispers.com or thestreet.com for today\'s pre/after earnings — earnings gappers are the highest-probability intraday setups';
+
+  const cards=[
+    {title:'Short Squeeze Watch',color:'var(--red)',body:squeeze},
+    {title:'Volatility Alert',color:'var(--pur)',body:highVol},
+    {title:'Market Bias',color:'var(--grn)',body:bias},
+    {title:'Earnings Plays',color:'var(--amb)',body:earningsNote},
+    {title:'Key Levels to Watch',color:'var(--blu)',body:`Pre-market high/low of ES: ${es?fmtP(es.preMarketPrice):'—'}. Watch VWAP from open and prior day high/low as key intraday pivots. Break + hold = continuation; rejection = fade.`},
+    {title:'Prop Desk Notes',color:'var(--tel)',body:`Focus on first 30-min range (9:30–10:00 ET). High RVOL (≥3×) gappers with news tend to continue. Low RVOL gaps without clear catalyst tend to fill. Best R:R setups are pull-to-VWAP in direction of gap.`},
+  ];
+  document.getElementById('alerts-grid').innerHTML=cards.map(c=>`
+    <div class="alert-card"><div class="al-ttl" style="color:${c.color}">${c.title}</div><div class="al-body">${c.body}</div></div>`).join('');
+}
+</script>
+</body>
+</html>
