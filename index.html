@@ -250,7 +250,11 @@ const UNIVERSE=[
   'UBER','LYFT','ABNB','DASH','BKNG','EXPE'
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const PROXY='https://corsproxy.io/?';
+const PROXIES=[
+  url=>`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url=>`https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url=>`https://thingproxy.freeboard.io/fetch/${url}`,
+];
 
 // ─── Clock ────────────────────────────────────────────────────────────────
 function tick(){
@@ -283,11 +287,19 @@ function setStatus(msg,show=true,pct=null){
   if(pct!=null)document.getElementById('prog').style.width=pct+'%';
 }
 
-async function safeFetch(url,useProxy=false){
-  const target=useProxy?PROXY+encodeURIComponent(url):url;
-  const r=await fetch(target,{headers:{'Accept':'application/json'}});
-  if(!r.ok)throw new Error('HTTP '+r.status);
-  return r.json();
+async function safeFetch(url){
+  // Try each proxy in order until one succeeds
+  let lastErr;
+  for(const proxyFn of PROXIES){
+    try{
+      const target=proxyFn(url);
+      const r=await fetch(target,{headers:{'Accept':'application/json'}});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const text=await r.text();
+      return JSON.parse(text);
+    }catch(e){lastErr=e;console.warn('proxy failed, trying next...',e);}
+  }
+  throw new Error('All proxies failed: '+lastErr?.message);
 }
 
 // ─── ATR Calculation ──────────────────────────────────────────────────────
@@ -304,14 +316,14 @@ function calcATR(quotes,period=14){
 }
 
 // ─── Fetch bulk Yahoo Finance quotes ─────────────────────────────────────
-async function batchQuotes(symbols,useProxy=false){
+async function batchQuotes(symbols){
   const results={};
   const chunks=[];
   for(let i=0;i<symbols.length;i+=100)chunks.push(symbols.slice(i,i+100));
   for(const chunk of chunks){
     try{
       const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${chunk.join(',')}&fields=preMarketPrice,preMarketChangePercent,preMarketVolume,regularMarketPreviousClose,regularMarketPrice,regularMarketVolume,marketCap,shortName,longName,averageDailyVolume10Day,fiftyTwoWeekHigh,fiftyTwoWeekLow,shortPercentOfFloat,floatShares,sector,trailingPE,priceToBook`;
-      const data=await safeFetch(url,useProxy);
+      const data=await safeFetch(url);
       (data?.quoteResponse?.result||[]).forEach(q=>{results[q.symbol]=q;});
     }catch(e){console.warn('batch quote error',e);}
   }
@@ -319,10 +331,10 @@ async function batchQuotes(symbols,useProxy=false){
 }
 
 // ─── Fetch historical for ATR ─────────────────────────────────────────────
-async function fetchATR(symbol,useProxy=false){
+async function fetchATR(symbol){
   try{
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=30d`;
-    const data=await safeFetch(url,useProxy);
+    const data=await safeFetch(url);
     const r=data?.chart?.result?.[0];
     if(!r)return null;
     const ts=r.timestamp,q=r.indicators?.quote?.[0];
@@ -333,10 +345,10 @@ async function fetchATR(symbol,useProxy=false){
 }
 
 // ─── Fetch news headline ──────────────────────────────────────────────────
-async function fetchNews(symbol,useProxy=false){
+async function fetchNews(symbol){
   try{
     const url=`https://query1.finance.yahoo.com/v1/finance/search?q=${symbol}&quotesCount=0&newsCount=3&enableFuzzyQuery=false`;
-    const data=await safeFetch(url,useProxy);
+    const data=await safeFetch(url);
     const items=data?.news||[];
     if(!items.length)return null;
     const latest=items[0];
@@ -345,13 +357,13 @@ async function fetchNews(symbol,useProxy=false){
 }
 
 // ─── Economic Calendar (TradingView) ─────────────────────────────────────
-async function fetchEcon(useProxy=false){
+async function fetchEcon(){
   try{
     const now=new Date();
     const from=now.toISOString().replace(/T.*/,'T00:00:00.000Z');
     const to=now.toISOString().replace(/T.*/,'T23:59:59.000Z');
     const url=`https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=US`;
-    const data=await safeFetch(url,useProxy);
+    const data=await safeFetch(url);
     return Array.isArray(data)?data:(data?.result||[]);
   }catch(e){
     console.warn('econ calendar error',e);
@@ -375,21 +387,21 @@ async function runScan(){
   btn.disabled=true;btn.textContent='⟳ SCANNING...';
   setStatus('Fetching market overview...',true,5);
 
-  // Yahoo Finance blocks direct browser requests — always use CORS proxy
-  const useProxy=true;
+  
+  
 
   try{
     // 1. Market overview
     setStatus('Fetching futures, VIX, macro data...',true,10);
-    const macroQ=await batchQuotes([...MACRO_SYMBOLS,...Object.keys(SECTOR_ETFS)],useProxy);
+    const macroQ=await batchQuotes([...MACRO_SYMBOLS,...Object.keys(SECTOR_ETFS)]);
 
     // 2. Economic calendar
     setStatus('Fetching economic calendar...',true,20);
-    const econData=await fetchEcon(useProxy);
+    const econData=await fetchEcon();
 
     // 3. Bulk universe quotes
     setStatus(`Scanning ${UNIVERSE.length} stocks for pre-market gaps...`,true,30);
-    const allQuotes=await batchQuotes(UNIVERSE,useProxy);
+    const allQuotes=await batchQuotes(UNIVERSE);
 
     // 4. Filter gappers
     setStatus('Filtering by gap, volume, market cap...',true,50);
@@ -407,9 +419,9 @@ async function runScan(){
     for(let i=0;i<candidates.length;i++){
       const q=candidates[i];
       setStatus(`Fetching ATR: ${q.symbol} (${i+1}/${candidates.length})...`,true,60+Math.round((i/candidates.length)*20));
-      const atr=await fetchATR(q.symbol,useProxy);
+      const atr=await fetchATR(q.symbol);
       if(atr==null||atr<1)continue;
-      const news=await fetchNews(q.symbol,useProxy);
+      const news=await fetchNews(q.symbol);
       gappers.push({
         symbol:q.symbol,
         name:q.shortName||q.longName||'',
