@@ -152,12 +152,8 @@ footer{font-size:10px;color:var(--tx3);text-align:center;padding:18px 0 0;border
 
 <div class="main">
 
-  <!-- CORS warning -->
-  <div class="cors-warn" id="cors-warn">
-    <strong>⚠ CORS Restriction Detected.</strong> Browsers block data requests from local files (<code>file://</code>).
-    <strong>Fix:</strong> Either <a href="https://pages.github.com" target="_blank">host this file on GitHub Pages (free)</a>, or drag it into a Chrome/Edge tab after launching Chrome with: <code>--disable-web-security --user-data-dir=/tmp/chrome-dev</code>.
-    Data will still load where allowed.
-  </div>
+  <!-- proxy notice (hidden by default) -->
+  <div class="cors-warn" id="cors-warn" style="display:none;"></div>
 
   <!-- Status bar -->
   <div class="sbar" id="sbar">
@@ -379,14 +375,8 @@ async function runScan(){
   btn.disabled=true;btn.textContent='⟳ SCANNING...';
   setStatus('Fetching market overview...',true,5);
 
-  let useProxy=false;
-  // Test if direct fetch works
-  try{
-    await fetch('https://query1.finance.yahoo.com/v7/finance/quote?symbols=SPY',{headers:{'Accept':'application/json'}});
-  }catch(e){
-    useProxy=true;
-    document.getElementById('cors-warn').style.display='block';
-  }
+  // Yahoo Finance blocks direct browser requests — always use CORS proxy
+  const useProxy=true;
 
   try{
     // 1. Market overview
